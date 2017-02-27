@@ -1,0 +1,189 @@
+
+setwd("---")
+
+train <- read.table("train.csv", sep=",", header=TRUE)
+test <- read.table("test.csv", sep=",", header=TRUE)
+
+cat.var.names <- c(paste("Product_Info_", c(1:3,5:7), sep=""), paste("Employment_Info_", c(2,3,5), sep=""), paste("InsuredInfo_", 1:7, sep=""), paste("Insurance_History_", c(1:4,7:9), sep=""), "Family_Hist_1", paste("Medical_History_", c(2:14, 16:23, 25:31, 33:41), sep=""))
+cont.var.names <- c("Product_Info_4", "Ins_Age", "Ht", "Wt", "BMI", "Employment_Info_1", "Employment_Info_4", "Employment_Info_6", "Insurance_History_5", "Family_Hist_2", "Family_Hist_3", "Family_Hist_4", "Family_Hist_5")
+disc.var.names <- c("Medical_History_1", "Medical_History_15", "Medical_History_24", "Medical_History_32", paste("Medical_Keyword_", 1:48, sep=""))
+
+train.cat <- train[, cat.var.names]
+test.cat <- test[, cat.var.names]
+train.cont <- train[, cont.var.names]
+test.cont <- test[, cont.var.names]
+train.disc <- train[, disc.var.names]
+test.disc <- test[, disc.var.names]
+
+
+###########Diterents correlations between vars
+library("caret") # function findCorrelation
+correlationCont <- cor(train[, cont.var.names])
+highlyCorrelatedCont <- findCorrelation(correlationCont, cutoff=0.75)
+[1] 4
+#Eliminamos la columna correlada:
+cont.var.names<-cont.var.names[-4]
+train.cont <- train[, cont.var.names]
+
+#No se aplica a correlationCat. Lo hacemos tb para las var continuas
+
+correlationDisc <- cor(train[, disc.var.names])
+highlyCorrelatedDisc <- findCorrelation(correlationDisc, cutoff=0.75)
+print(highlyCorrelatedDisc)
+#integer(0)
+
+#########################Construyo el árbol de regresión##################################
+library("rpart")
+
+# head(predict(dfit,newdata = test.cont ,type = "prob"))
+# #            1          2           3          4          5         6         7          8
+# # 1 0.08396802 0.07369562 0.009459276 0.03171161 0.02295704 0.1555766 0.1302344 0.49239734
+# # 2 0.08396802 0.07369562 0.009459276 0.03171161 0.02295704 0.1555766 0.1302344 0.49239734
+# # 3 0.11441582 0.12046392 0.021844315 0.01821545 0.10459656 0.3098050 0.2187278 0.09193112
+# # 4 0.08396802 0.07369562 0.009459276 0.03171161 0.02295704 0.1555766 0.1302344 0.49239734
+# # 5 0.08396802 0.07369562 0.009459276 0.03171161 0.02295704 0.1555766 0.1302344 0.49239734
+# # 6 0.08396802 0.07369562 0.009459276 0.03171161 0.02295704 0.1555766 0.1302344 0.49239734
+# 
+# head(predict(dfit,newdata = test.cont ,type = "vector"))
+# 1 2 3 4 5 6 
+# 8 8 6 8 8 8
+# 
+##Medimos el grado de aciertos de las predicciones sobre train.cont####
+nrow(train.cont)
+[1] 59381
+obs.train.cont<-nrow(train.cont)
+ntrain <- round(obs.train.cont*0.8)
+tindex <- sample(obs.train.cont,ntrain)
+xtrain <- train[tindex,]# tomo 80% de las observaciones aleatoriamente de train
+xtest <- train[-tindex,]# tomo el restante 20% de las observaciones
+colnames(xtest)
+ztrain<-xtest[tindex] # z es la columna de las etiquetas
+
+##Ahora trabajaremos sobre xtrain y ztrain########
+train.dfit<-rpart(Response ~ Product_Info_4+Ins_Age+Ht+BMI+Employment_Info_1+Employment_Info_4+Employment_Info_6+Insurance_History_5+Family_Hist_2+Family_Hist_3+Family_Hist_4+Family_Hist_5, data=xtrain,method = "class")
+train.dfit
+# n= 47505 
+# 
+# node), split, n, loss, yval, (yprob)
+# * denotes terminal node
+# 
+# 1) root 47505 31979 8 (0.1 0.11 0.017 0.024 0.092 0.19 0.13 0.33)  
+# 2) BMI>=0.4929564 17126 12725 6 (0.14 0.17 0.026 0.013 0.18 0.26 0.15 0.063)  
+# 4) BMI>=0.6094367 5798  3850 5 (0.18 0.27 0.035 0.00034 0.34 0.15 0.021 0.0041)  
+# 8) BMI>=0.7456791 1434   703 2 (0.25 0.51 0.013 0 0.19 0.038 0.0014 0.0021) *
+#   9) BMI< 0.7456791 4364  2685 5 (0.16 0.19 0.042 0.00046 0.38 0.19 0.027 0.0048) *
+#   5) BMI< 0.6094367 11328  7822 6 (0.11 0.12 0.021 0.019 0.1 0.31 0.22 0.093) *
+#   3) BMI< 0.4929564 30379 15925 8 (0.087 0.075 0.012 0.031 0.041 0.15 0.13 0.48)  
+# 6) Product_Info_4< 0.07407692 961   398 5 (0.18 0.14 0.094 0 0.59 0 0 0) *
+#   7) Product_Info_4>=0.07407692 29418 14964 8 (0.084 0.073 0.0094 0.032 0.023 0.16 0.13 0.49) *
+
+
+
+
+# Representación de algunos nodos del árbol:fracturas en el camino de la raíz a 
+#la seleccionada nodos:
+path.rpart(train.dfit, node = c(4, 6))
+
+# node number: 4 
+# root
+# BMI>=0.493
+# BMI>=0.6094
+# 
+# node number: 6 
+# root
+# BMI< 0.493
+# Product_Info_4< 0.07408
+
+
+##################Visualización del árbol####################3
+#plot(train.dfit, compress=TRUE)
+
+plot(train.dfit, uniform = FALSE, branch = 1, compress = TRUE, margin = 0, minbranch = 0.3)
+
+text(train.dfit, use.n=TRUE)
+
+######TRAZADO DE UNA TABLA DE COMPLEJIDAD DE LOS PARÁMETROS PARA UN RPART FIJADO###
+plotcp(train.dfit, minline = TRUE, lty = 3, col = 1, upper = c("size", "splits", "none"))
+
+#post genera una presentación gráfica PostScript de un objeto rpart:
+post(dfit) # NO EJECUTA ESTO
+
+head(predict(train.dfit,newdata = xtest ,type = "class"))
+# 1  4  8 10 15 16 
+# 8  8  6  6  8  6 
+# Levels: 1 2 3 4 5 6 7 8
+
+####Ahora usamos table para comparar el grado de acierto entre las previsiones y los valores de las etiquetas####
+resp.pred<-predict(train.dfit,newdata = xtest ,type = "class")
+confusionMatrix(resp.pred, xtest$Response)
+table(resp.pred, xtest$Response)
+# resp.pred
+#      1    2    3    4    5    6    7    8
+# 1    0   86    0    0  201  355    0  651
+# 2    0  179    0    0  257  326    0  533
+# 3    0    4    0    0   58   53    0   69
+# 4    0    0    0    0    1   55    0  233
+# 5    0   68    0    0  548  282    0  163
+# 6    0   12    0    0  212  843    0 1127
+# 7    0    0    0    0   30  586    0  949
+# 8    0    1    0    0    4  256    0 3734
+
+sum(resp.pred==xtest$Response)/length(xtest$Response)
+[1] 0.4440047
+
+###############Uso de printcp. Tb summary incluye esta información
+###############y aporta información de cada nodo
+printcp(train.dfit)
+
+# Classification tree:
+#   rpart(formula = ztrain ~ Product_Info_4 + Ins_Age + Ht + BMI + 
+#           Employment_Info_1 + Employment_Info_4 + Employment_Info_6 + 
+#           Insurance_History_5 + Family_Hist_2 + Family_Hist_3 + Family_Hist_4 + 
+#           Family_Hist_5, data = xtrain, method = "class")
+# 
+# Variables actually used in tree construction:
+#   [1] BMI            Product_Info_4
+# 
+# Root node error: 31979/47505 = 0.67317
+# 
+# n= 47505 
+# 
+# CP nsplit rel error  xerror      xstd
+# 1 0.104100      0   1.00000 1.00000 0.0031969
+# 2 0.032928      1   0.89590 0.89603 0.0033345
+# 3 0.017605      2   0.86297 0.86347 0.0033625
+# 4 0.014447      3   0.84537 0.84587 0.0033748
+# 5 0.010000      4   0.83092 0.83155 0.0033834
+
+####Uso de prune-poda del árbol#######
+dfit.prune <- prune(train.dfit, cp = 0.012) # SIGNIFICADO DE CP = 0.1
+dfit.prune
+# n= 47505 
+# 
+# node), split, n, loss, yval, (yprob)
+# * denotes terminal node
+# 
+# 1) root 47505 31979 8 (0.1 0.11 0.017 0.024 0.092 0.19 0.13 0.33)  
+# 2) BMI>=0.4929564 17126 12725 6 (0.14 0.17 0.026 0.013 0.18 0.26 0.15 0.063) *
+#   3) BMI< 0.4929564 30379 15925 8 (0.087 0.075 0.012 0.031 0.041 0.15 0.13 0.48) *
+
+plot(dfit.prune)
+text(dfit.prune, use.n=TRUE)
+
+dfit.prune.predict <-predict(dfit.prune,newdata = xtest ,type = "class")
+dfit.prune.predict
+
+table(xtest$Response, dfit.prune.predict)
+# dfit.prune.predict
+# 1    2    3    4    5    6    7    8
+# 1    0    0    0    0    0  597    0  696
+# 2    0    0    0    0    0  715    0  580
+# 3    0    0    0    0    0   97    0   87
+# 4    0    0    0    0    0   56    0  233
+# 5    0    0    0    0    0  761    0  300
+# 6    0    0    0    0    0 1067    0 1127
+# 7    0    0    0    0    0  616    0  949
+# 8    0    0    0    0    0  257    0 3738
+
+sum(dfit.prune.predict==xtest$Response)/length(xtest$Response)
+#[1] 0.4045975
